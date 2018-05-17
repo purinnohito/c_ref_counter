@@ -31,6 +31,11 @@ Dedication along with this software.If not, see
 #define custom_alloc_another(_size, _ref_obj, _alloc, _free) \
  c_ref_counter__custom_alloc_another(_size, _ref_obj, _alloc, _free)
 
+// link pointer(reference_counter outside management)
+#define link_obj(link_obj, ref_obj)     c_ref_counter__link_obj(link_obj, ref_obj)
+#define custom_link_obj(link_obj, counter_obj, ref_freeFunc) \
+c_ref_counter__custom_link_obj(link_obj, counter_obj, ref_freeFunc)
+
 //-------------------------------------------------------
 // get Reference Countera
 

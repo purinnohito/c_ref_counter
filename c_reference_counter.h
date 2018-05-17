@@ -74,11 +74,11 @@ typedef void(*c_ref_counter__Free_Function)(void *);
 
 
 typedef struct c_reference_counter_struct {
-  const int   alloc_state;                    //this manage state
-  c_ref_counter__Free_Function ref_freeFunc;     //ref_pointer free
-  void*       ref_pointer;
-  size_t      ref_count;
-  REF_MUTEX_OBJ  writelock;
+  const int       alloc_state;      //this manage state
+  Free_Function   ref_freeFunc;     //ref_pointer free
+  void*           ref_pointer;
+  size_t          ref_count;
+  REF_MUTEX_OBJ   writelock;
 } c_ref_counter__st_Refcounter;
 #define st_Refcounter  c_ref_counter__st_Refcounter
 
@@ -86,26 +86,30 @@ typedef struct c_reference_counter_struct {
 // alloceter
 
 // alloc pointer(reference_counter self management)
-inline void * c_ref_counter__alloc_self(size_t size);
-inline void * c_ref_counter__custom_alloc_self(size_t size
-                              , c_ref_counter__Malloc_Function mallocFunction
-                              , c_ref_counter__Free_Function freeFunc);
+static inline void * c_ref_counter__alloc_self(size_t size);
+static inline void * c_ref_counter__custom_alloc_self(size_t size
+                              , Malloc_Function mallocFunction
+                              , Free_Function freeFunc);
 // alias
 #define refAlloc(_size)                           c_ref_counter__alloc_self(_size)
 #define refCustomAlloc(_size, _alloc, _free)      c_ref_counter__custom_alloc_self(_size, _alloc, _free)
 
 // alloc pointer(reference_counter outside management)
-inline void * c_ref_counter__alloc_another(size_t size, c_ref_counter__st_Refcounter* ref_obj);
-inline void * c_ref_counter__custom_alloc_another(size_t size
-                              , c_ref_counter__st_Refcounter* ref_obj
-                              , c_ref_counter__Malloc_Function mallocFunction
-                              , c_ref_counter__Free_Function ref_freeFunc);
-
+static inline void * c_ref_counter__alloc_another(size_t size, st_Refcounter* ref_obj);
+static inline void * c_ref_counter__custom_alloc_another(size_t size
+                              , st_Refcounter* ref_obj
+                              , Malloc_Function mallocFunction
+                              , Free_Function ref_freeFunc);
+// link pointer(reference_counter outside management)
+static inline void * c_ref_counter__link_obj(void* link_obj, st_Refcounter* ref_obj);
+static inline void * c_ref_counter__custom_link_obj(void* link_obj
+  , st_Refcounter* counter_obj
+  , Free_Function ref_freeFunc);
 //-------------------------------------------------------
 // get Reference Countera
 
 // only alloc_self
-inline c_ref_counter__st_Refcounter* c_ref_counter__getSelfRefcounter(void *ptr);
+static inline st_Refcounter* c_ref_counter__getSelfRefcounter(void *ptr);
 // alias
 #define getRefCount(_ptr)         c_ref_counter__getSelfRefcounter(_ptr)
 
@@ -113,39 +117,39 @@ inline c_ref_counter__st_Refcounter* c_ref_counter__getSelfRefcounter(void *ptr)
 // retain
 
 // reference count up(only alloc_self)
-inline void c_ref_counter__selfRefRetain(void * ptr);
+static inline void c_ref_counter__selfRefRetain(void * ptr);
 // alias
 #define refRetain(_ptr)         c_ref_counter__selfRefRetain(_ptr)
 
-// reference count up(direct c_ref_counter__st_Refcounter)
-inline void c_ref_counter__refCounterRetain(c_ref_counter__st_Refcounter* mem_object);
+// reference count up(direct st_Refcounter)
+static inline void c_ref_counter__refCounterRetain(st_Refcounter* mem_object);
 
 //-------------------------------------------------------
 // release
 
 // reference count release(only alloc_self)
-inline size_t c_ref_counter__selfRefRelease(void * ptr);
+static inline size_t c_ref_counter__selfRefRelease(void * ptr);
 // alias
 #define refRelease(_ptr)          c_ref_counter__selfRefRelease(_ptr)
 
-// reference count release(direct c_ref_counter__st_Refcounter)
-inline size_t c_ref_counter__refCounterRelease(c_ref_counter__st_Refcounter* mem_object);
+// reference count release(direct st_Refcounter)
+static inline size_t c_ref_counter__refCounterRelease(st_Refcounter* mem_object);
 
 
 
 
 // alloc pointer(reference_counter self management)
-inline void * c_ref_counter__custom_alloc_self(size_t size, c_ref_counter__Malloc_Function mallocFunction, c_ref_counter__Free_Function freeFunc)
+static inline void * c_ref_counter__custom_alloc_self(size_t size, Malloc_Function mallocFunction, Free_Function freeFunc)
 {
   if (!mallocFunction){
     return NULL;
   }
-  c_ref_counter__st_Refcounter *mem_object = (c_ref_counter__st_Refcounter*)mallocFunction(sizeof(c_ref_counter__st_Refcounter)+size);
+  st_Refcounter *mem_object = (st_Refcounter*)mallocFunction(sizeof(st_Refcounter)+size);
   if (!mem_object) {
     return NULL;
   }
   char  *ptr = (char*)mem_object;
-  ptr += sizeof(c_ref_counter__st_Refcounter);
+  ptr += sizeof(st_Refcounter);
   mem_object->ref_count = 1;
   mem_object->ref_pointer = ptr;
   mem_object->ref_freeFunc = freeFunc;
@@ -154,15 +158,38 @@ inline void * c_ref_counter__custom_alloc_self(size_t size, c_ref_counter__Mallo
   *((int*)(&mem_object->alloc_state)) = self_manage_c_reference_counter_alloc_state;
   return (void *)ptr;
 }
-inline void * c_ref_counter__alloc_self(size_t size) {
+static inline void * c_ref_counter__alloc_self(size_t size) {
   return c_ref_counter__custom_alloc_self(size, malloc, free);
 }
 
+// link pointer(reference_counter outside management)
+static inline void * c_ref_counter__custom_link_obj(void* link_obj
+                              , st_Refcounter* counter_obj
+                              , Free_Function ref_freeFunc)
+{
+  if (!counter_obj) {
+    return NULL;
+  }
+  counter_obj->ref_count = 1;
+  counter_obj->ref_pointer = link_obj;
+  counter_obj->ref_freeFunc = ref_freeFunc;
+  REF_MUTEX_INIT_LOCK(&counter_obj->writelock);
+
+
+  if (counter_obj->alloc_state != outside_manage_c_reference_counter_alloc_state) {
+    *((int*)(&counter_obj->alloc_state)) = outside_manage_c_reference_counter_alloc_state;
+  }
+  return link_obj;
+}
+static inline void * c_ref_counter__link_obj(void* link_obj, st_Refcounter* counter_obj) {
+  return c_ref_counter__custom_link_obj(link_obj, counter_obj, free);
+}
+
 // alloc pointer(reference_counter outside management)
-inline void * c_ref_counter__custom_alloc_another(size_t size
-                              , c_ref_counter__st_Refcounter* counter_obj
-                              , c_ref_counter__Malloc_Function mallocFunction
-                              , c_ref_counter__Free_Function ref_freeFunc)
+static inline void * c_ref_counter__custom_alloc_another(size_t size
+                              , st_Refcounter* counter_obj
+                              , Malloc_Function mallocFunction
+                              , Free_Function ref_freeFunc)
 {
   if (!mallocFunction || !counter_obj) {
     return NULL;
@@ -171,30 +198,21 @@ inline void * c_ref_counter__custom_alloc_another(size_t size
   if (!ptr) {
     return NULL;
   }
-  counter_obj->ref_count = 1;
-  counter_obj->ref_pointer = ptr;
-  counter_obj->ref_freeFunc = ref_freeFunc;
-  REF_MUTEX_INIT_LOCK(&counter_obj->writelock);
-
-
-  if(counter_obj->alloc_state != outside_manage_c_reference_counter_alloc_state){
-    *((int*)(&counter_obj->alloc_state)) = outside_manage_c_reference_counter_alloc_state;
-  }
-  return (void *)ptr;
+  return (void *)c_ref_counter__custom_link_obj(ptr, counter_obj, ref_freeFunc);
 }
-inline void * c_ref_counter__alloc_another(size_t size, c_ref_counter__st_Refcounter* counter_obj) {
+static inline void * c_ref_counter__alloc_another(size_t size, st_Refcounter* counter_obj) {
   return c_ref_counter__custom_alloc_another(size, counter_obj, malloc, free);
 }
 
 // only alloc_self
-inline c_ref_counter__st_Refcounter* c_ref_counter__getSelfRefcounter(void *ptr) {
+static inline st_Refcounter* c_ref_counter__getSelfRefcounter(void *ptr) {
   char *refCntPtr = (char*)ptr;
-  refCntPtr -= sizeof(c_ref_counter__st_Refcounter);
-  return (c_ref_counter__st_Refcounter*)refCntPtr;
+  refCntPtr -= sizeof(st_Refcounter);
+  return (st_Refcounter*)refCntPtr;
 }
 
 // reference count up
-inline void c_ref_counter__refCounterRetain(c_ref_counter__st_Refcounter* mem_object) {
+static inline void c_ref_counter__refCounterRetain(st_Refcounter* mem_object) {
   {
 #pragma omp atomic
     ++(mem_object->ref_count);
@@ -202,13 +220,13 @@ inline void c_ref_counter__refCounterRetain(c_ref_counter__st_Refcounter* mem_ob
 }
 
 // reference count up(only alloc_self)
-inline void c_ref_counter__selfRefRetain(void * ptr)
+static inline void c_ref_counter__selfRefRetain(void * ptr)
 {
   c_ref_counter__refCounterRetain(c_ref_counter__getSelfRefcounter(ptr));
 }
 
-// reference count release(direct c_ref_counter__st_Refcounter)
-inline size_t c_ref_counter__refCounterRelease(c_ref_counter__st_Refcounter* mem_object)
+// reference count release(direct st_Refcounter)
+static inline size_t c_ref_counter__refCounterRelease(st_Refcounter* mem_object)
 {
   REF_MUTEX_LOCK(&mem_object->writelock);
   REF_MUTEX_OBJ  writelock = mem_object->writelock;
@@ -217,7 +235,7 @@ inline size_t c_ref_counter__refCounterRelease(c_ref_counter__st_Refcounter* mem
     --(mem_object->ref_count);
     if (mem_object->ref_count == 0)
     {
-      c_ref_counter__Free_Function ref_freeFunc = mem_object->ref_freeFunc;
+      Free_Function ref_freeFunc = mem_object->ref_freeFunc;
       if (mem_object->alloc_state == outside_manage_c_reference_counter_alloc_state) {
         ref_freeFunc(mem_object->ref_pointer);
         mem_object->ref_pointer = NULL;
@@ -240,7 +258,7 @@ inline size_t c_ref_counter__refCounterRelease(c_ref_counter__st_Refcounter* mem
 }
 
 // reference count release(only alloc_self)
-inline size_t c_ref_counter__selfRefRelease(void * ptr)
+static inline size_t c_ref_counter__selfRefRelease(void * ptr)
 {
   {
     return c_ref_counter__refCounterRelease(c_ref_counter__getSelfRefcounter(ptr));
