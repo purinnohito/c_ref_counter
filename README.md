@@ -5,6 +5,7 @@ By including c_reference_counter.h, you can use the full name version of memory 
 By including c_ref_name.h as in test.cpp you can use with short name.
 Below simple usage example
 
+```c:reftest1
 // When the reference counter and memory allocation are performed at the same time
 const char* test_ref() {
   long* lp = (long*)refAlloc(sizeof(long)); // allocate a reference counter area and allocate memory
@@ -17,7 +18,10 @@ const char* test_ref() {
   mu_assert("error, lp cnt != 0", refRelease(lp) == 0);// When the reference count reaches 0, the area secured by refAlloc is freed
   return 0;
 }
+```
 
+
+```c:reftest2
 // Example of securing reference count and memory separately
 const char * test_ref_another() {
   st_Refcounter ref_st = { 0 }; // securing reference counter
@@ -31,7 +35,7 @@ const char * test_ref_another() {
   mu_assert("error, lp cnt! = 0", refCounterRelease(&ref_st) == 0);
   return 0;
 }
-
+```
 
 ## License
 

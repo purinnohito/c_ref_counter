@@ -5,6 +5,7 @@ c_reference_counter.hをincludeすることでフルネーム版のメモリ確�
 test.cppにあるようにc_ref_name.hをincludeする事でshortネームでの使用ができます。
 以下簡単な使用例
 
+```c:reftest1
 // 参照カウンタとメモリ確保を同時に行う場合
 const char* test_ref() {
   long* lp = (long*)refAlloc(sizeof(long)); // 参照カウンタ領域を付与してメモリの確保
@@ -17,7 +18,9 @@ const char* test_ref() {
   mu_assert("error, lp cnt != 0", refRelease(lp) == 0);//参照カウントが0になるとrefAllocで確保した領域が開放される
   return 0;
 }
+```
 
+```c:reftest2
 // 参照カウントとメモリを別に確保する例
 const char* test_ref_another() {
   st_Refcounter ref_st = {0}; // 参照カウンタの確保
@@ -30,6 +33,7 @@ const char* test_ref_another() {
   mu_assert("error, lp cnt != 0", refCounterRelease(&ref_st) == 0); //参照カウンタ0(管理対象メモリlpの開放)
   return 0;
 }
+```
 
 ## License
 
